@@ -108,6 +108,8 @@ class MainActivity : AppCompatActivity() {
         findViewById<View>(R.id.more).setOnClickListener { v ->
             androidx.appcompat.widget.PopupMenu(this, v).apply {
                 menuInflater.inflate(R.menu.main, menu)
+                // Thin lines between the groups (Go to… / view / settings).
+                androidx.core.view.MenuCompat.setGroupDividerEnabled(menu, true)
                 menu.findItem(R.id.m_sort).isChecked = prefs.newestFirst
                 menu.findItem(R.id.m_audio).isChecked = prefs.audioOnly
                 setOnMenuItemClickListener { onOptionsItemSelected(it) }

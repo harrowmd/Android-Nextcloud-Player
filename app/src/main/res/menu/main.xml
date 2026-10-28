@@ -1,13 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <menu xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:id="@+id/m_history" android:title="Go to History" />
-    <item android:id="@+id/m_favs" android:title="Go to Favourites" />
-    <item android:id="@+id/m_stats" android:title="Statistics" />
-    <item android:id="@+id/m_refresh" android:title="Refresh" />
-    <item android:id="@+id/m_home" android:title="Go to Nextcloud" />
-    <item android:id="@+id/m_local" android:title="Go to local storage" />
-    <item android:id="@+id/m_sort" android:title="Sort: newest first" android:checkable="true" />
-    <item android:id="@+id/m_audio" android:title="Show only audio files" android:checkable="true" />
-    <item android:id="@+id/m_storage" android:title="Offline storage…" />
-    <item android:id="@+id/m_account" android:title="Nextcloud account…" />
+    <group android:id="@+id/g_goto">
+        <item android:id="@+id/m_history" android:title="Go to History" />
+        <item android:id="@+id/m_favs" android:title="Go to Favourites" />
+        <item android:id="@+id/m_home" android:title="Go to Nextcloud" />
+        <item android:id="@+id/m_local" android:title="Go to local storage" />
+    </group>
+    <group android:id="@+id/g_view">
+        <item android:id="@+id/m_stats" android:title="Statistics" />
+        <item android:id="@+id/m_refresh" android:title="Refresh" />
+        <item android:id="@+id/m_sort" android:title="Sort: newest first" android:checkable="true" />
+        <item android:id="@+id/m_audio" android:title="Show only audio files" android:checkable="true" />
+    </group>
+    <group android:id="@+id/g_settings">
+        <item android:id="@+id/m_storage" android:title="Offline storage…" />
+        <item android:id="@+id/m_account" android:title="Nextcloud account…" />
+    </group>
 </menu>
