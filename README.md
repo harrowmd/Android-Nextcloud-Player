@@ -3,7 +3,7 @@
 A simple Android audio player for music and audiobooks stored on a **Nextcloud** server (and on the phone itself).
 Built because the Nextcloud app's media player makes it hard to find and pick files with long names.
 
-**Download:** get the latest APK from the [Releases page](../../releases/latest) and open it on your phone
+**Download:** get **m21-nextcloud-player.apk** from the [latest release](../../releases/latest/download/m21-nextcloud-player.apk) ([all releases](../../releases)) and open it on your phone
 (Android will ask once to allow installs from your browser or file manager). Android 10 or newer.
 
 ## Features
@@ -35,7 +35,7 @@ Built because the Nextcloud app's media player makes it hard to find and pick fi
 Android SDK + JDK 17:
 
 ```
-./gradlew assembleDebug        # → app/build/outputs/apk/debug/ncplayer.apk
+./gradlew assembleDebug        # → app/build/outputs/apk/debug/m21-nextcloud-player.apk
 ```
 
 Kotlin, AndroidX Media3 (ExoPlayer + MediaSessionService), OkHttp for WebDAV.
