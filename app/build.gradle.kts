@@ -14,8 +14,8 @@ android {
         applicationId = "com.manytwo.ncplayer"
         minSdk = 29
         targetSdk = 36
-        versionCode = 23
-        versionName = "1.22"
+        versionCode = 24
+        versionName = "1.23"
         buildConfigField("String", "BUILD_TIME",
             "\"" + SimpleDateFormat("yyyy-MM-dd HH:mm").format(Date()) + "\"")
     }
@@ -41,7 +41,18 @@ android {
     }
 }
 
+// The user guide (USERGUIDE.md at the repo root) is bundled into the APK so Help works offline.
+val copyGuide by tasks.registering(Copy::class) {
+    from(rootProject.file("USERGUIDE.md"))
+    into(layout.buildDirectory.dir("generated/guide"))
+}
+android.sourceSets.getByName("main").assets.srcDir(layout.buildDirectory.dir("generated/guide"))
+tasks.named("preBuild") { dependsOn(copyGuide) }
+
 dependencies {
+    implementation("org.commonmark:commonmark:0.22.0")
+    implementation("org.commonmark:commonmark-ext-gfm-tables:0.22.0")
+    implementation("org.commonmark:commonmark-ext-heading-anchor:0.22.0")
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("com.google.android.material:material:1.12.0")

@@ -61,7 +61,7 @@ Each track row shows its name in full, then a details line, for example:
 - **Sort: newest first** (otherwise A–Z; names starting with `_` always come first)
 - **Show only audio files** (on by default)
 - **Offline storage…**, **Nextcloud account…**
-- **Help…** (this guide), **About…** (version, check for updates)
+- **Help…** (this guide – stored in the app, works offline), **About…** (version, check for updates)
 
 ## Playing tracks
 

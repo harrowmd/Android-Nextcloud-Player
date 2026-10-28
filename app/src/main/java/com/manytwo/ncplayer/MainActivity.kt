@@ -224,7 +224,7 @@ class MainActivity : AppCompatActivity() {
             R.id.m_audio -> { prefs.audioOnly = !prefs.audioOnly; applyFilter() }
             R.id.m_account -> showAccount()
             R.id.m_storage -> showStorage()
-            R.id.m_help -> openUrl(Updater.HELP_URL)
+            R.id.m_help -> startActivity(android.content.Intent(this, HelpActivity::class.java))
             R.id.m_about -> showAbout()
             else -> return super.onOptionsItemSelected(item)
         }

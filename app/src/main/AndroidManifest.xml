@@ -29,6 +29,11 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".HelpActivity"
+            android:exported="false"
+            android:label="Help" />
+
         <service
             android:name=".PlaybackService"
             android:exported="true"
