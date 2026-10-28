@@ -16,4 +16,8 @@
         <item android:id="@+id/m_storage" android:title="Offline storage…" />
         <item android:id="@+id/m_account" android:title="Nextcloud account…" />
     </group>
+    <group android:id="@+id/g_info">
+        <item android:id="@+id/m_help" android:title="Help…" />
+        <item android:id="@+id/m_about" android:title="About…" />
+    </group>
 </menu>

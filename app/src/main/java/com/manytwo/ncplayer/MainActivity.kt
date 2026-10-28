@@ -224,6 +224,8 @@ class MainActivity : AppCompatActivity() {
             R.id.m_audio -> { prefs.audioOnly = !prefs.audioOnly; applyFilter() }
             R.id.m_account -> showAccount()
             R.id.m_storage -> showStorage()
+            R.id.m_help -> openUrl(Updater.HELP_URL)
+            R.id.m_about -> showAbout()
             else -> return super.onOptionsItemSelected(item)
         }
         return true
@@ -853,6 +855,88 @@ class MainActivity : AppCompatActivity() {
             }
             .setNegativeButton("Cancel", null)
             .show()
+    }
+
+    // --- help / about / updates ---
+
+    private fun openUrl(url: String) {
+        runCatching { startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))) }
+            .onFailure { toastStatus("No browser found") }
+    }
+
+    private fun showAbout() {
+        val pad = (20 * resources.displayMetrics.density).toInt()
+        val tv = TextView(this).apply {
+            text = "Nextcloud Player\n\n" +
+                "Version ${BuildConfig.VERSION_NAME} (build ${BuildConfig.VERSION_CODE})\n" +
+                "Built ${BuildConfig.BUILD_TIME}\n\n" +
+                "Source code, downloads and help:\n${Updater.REPO_URL}"
+            textSize = 15f
+            setPadding(pad, pad / 2, pad, 0)
+            android.text.util.Linkify.addLinks(this, android.text.util.Linkify.WEB_URLS)
+        }
+        AlertDialog.Builder(this)
+            .setTitle("About")
+            .setView(tv)
+            .setPositiveButton("Check for new version") { _, _ -> checkForUpdate() }
+            .setNegativeButton("Close", null)
+            .show()
+    }
+
+    private fun checkForUpdate() {
+        toastStatus("Checking GitHub…")
+        lifecycleScope.launch {
+            val r = try { withContext(Dispatchers.IO) { Updater.latest() } } catch (e: Exception) {
+                AlertDialog.Builder(this@MainActivity).setTitle("Check for new version")
+                    .setMessage("Couldn't reach GitHub.\n${e.message}").setPositiveButton("OK", null).show()
+                return@launch
+            }
+            val current = BuildConfig.VERSION_NAME
+            if (!Updater.newer(r.version, current)) {
+                AlertDialog.Builder(this@MainActivity).setTitle("Up to date")
+                    .setMessage("You have the latest version ($current).").setPositiveButton("OK", null).show()
+                return@launch
+            }
+            AlertDialog.Builder(this@MainActivity)
+                .setTitle("Version ${r.version} is available")
+                .setMessage("You have $current. Published ${r.published}.\n\n${r.notes}".trim())
+                .setPositiveButton("Install update") { _, _ ->
+                    if (r.apkUrl == null) openUrl("${Updater.REPO_URL}/releases/latest") else installUpdate(r.apkUrl)
+                }
+                .setNeutralButton("Open download page") { _, _ -> openUrl("${Updater.REPO_URL}/releases/latest") }
+                .setNegativeButton("Later", null)
+                .show()
+        }
+    }
+
+    private fun installUpdate(url: String) {
+        if (!packageManager.canRequestPackageInstalls()) {
+            AlertDialog.Builder(this)
+                .setMessage("Android needs your permission for Nextcloud Player to install updates.\n\n" +
+                    "Turn on “Allow from this source” on the next screen, come back, and tap Install update again.")
+                .setPositiveButton("Open settings") { _, _ ->
+                    startActivity(android.content.Intent(android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                        android.net.Uri.parse("package:$packageName")))
+                }
+                .setNegativeButton("Cancel", null)
+                .show()
+            return
+        }
+        status.text = "Downloading update…"
+        status.isVisible = true
+        lifecycleScope.launch {
+            try {
+                val apk = withContext(Dispatchers.IO) {
+                    Updater.download(this@MainActivity, url) { pct ->
+                        runOnUiThread { status.text = "Downloading update… $pct%" }
+                    }
+                }
+                status.isVisible = false
+                Updater.install(this@MainActivity, apk)
+            } catch (e: Exception) {
+                status.text = "Update download failed: ${e.message}"
+            }
+        }
     }
 
     // --- account ---

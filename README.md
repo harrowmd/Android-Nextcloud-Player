@@ -6,6 +6,8 @@ Built because the Nextcloud app's media player makes it hard to find and pick fi
 **Download:** get **m21-nextcloud-player.apk** from the [latest release](../../releases/latest/download/m21-nextcloud-player.apk) ([all releases](../../releases)) and open it on your phone
 (Android will ask once to allow installs from your browser or file manager). Android 10 or newer.
 
+**User guide:** [USERGUIDE.md](USERGUIDE.md) (also opened by ⋮ → Help… in the app).
+
 ## Features
 
 - **Browse Nextcloud folders** over WebDAV; long file names are shown in full, wrapped over several lines.
@@ -20,6 +22,7 @@ Built because the Nextcloud app's media player makes it hard to find and pick fi
 - **Sleep timer** (minutes with fade-out, or end of track) and **playback speed** 0.75×–2×.
 - Background playback with lock-screen / notification controls and a **home-screen widget**
   (play/pause resumes the last track).
+- **Help** and **About** (version, build date, check for and install updates from GitHub releases).
 - A single tap only selects a track; play it from the long-press menu, so a stray touch never starts playback.
 - All audio is sent to Android as 44.1 kHz stereo, which avoids silent Bluetooth playback on some phones
   when switching between e.g. mono 22 kHz audiobooks and stereo music.

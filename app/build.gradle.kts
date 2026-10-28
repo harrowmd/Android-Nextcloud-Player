@@ -1,3 +1,6 @@
+import java.text.SimpleDateFormat
+import java.util.Date
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -11,8 +14,14 @@ android {
         applicationId = "com.manytwo.ncplayer"
         minSdk = 29
         targetSdk = 36
-        versionCode = 22
-        versionName = "1.21"
+        versionCode = 23
+        versionName = "1.22"
+        buildConfigField("String", "BUILD_TIME",
+            "\"" + SimpleDateFormat("yyyy-MM-dd HH:mm").format(Date()) + "\"")
+    }
+
+    buildFeatures {
+        buildConfig = true
     }
 
     compileOptions {
