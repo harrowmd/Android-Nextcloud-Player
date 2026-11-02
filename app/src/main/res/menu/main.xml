@@ -3,6 +3,7 @@
     <group android:id="@+id/g_goto">
         <item android:id="@+id/m_history" android:title="Go to History" />
         <item android:id="@+id/m_favs" android:title="Go to Favourites" />
+        <item android:id="@+id/m_bookmarks" android:title="Go to Bookmarks" />
         <item android:id="@+id/m_home" android:title="Go to Nextcloud" />
         <item android:id="@+id/m_local" android:title="Go to local storage" />
     </group>

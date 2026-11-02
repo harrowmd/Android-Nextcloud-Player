@@ -24,6 +24,8 @@ data class Entry(
     val note: String? = null,
     /** Folder rows that don't open path + "/" + name (storage volumes): the path to open. */
     val target: String? = null,
+    /** Rows in the Bookmarks view: the bookmark shown. */
+    val bookmark: Bookmark? = null,
 ) {
     val isAudio get() = !isDir && (type.startsWith("audio/") || name.substringAfterLast('.', "").lowercase() in AUDIO_EXT)
 

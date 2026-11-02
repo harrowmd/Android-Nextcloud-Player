@@ -9,6 +9,7 @@ It is designed to make long file names easy to read and to pick up every track w
 - [Searching](#searching)
 - [Resume and History](#resume-and-history)
 - [Favourites](#favourites)
+- [Bookmarks](#bookmarks)
 - [Saving folders to the phone (offline)](#saving-folders-to-the-phone-offline)
 - [Phone storage and SD card](#phone-storage-and-sd-card)
 - [Sleep timer and speed](#sleep-timer-and-speed)
@@ -56,7 +57,7 @@ Each track row shows its name in full, then a details line, for example:
 
 ### The ⋮ menu
 
-- **Go to History / Go to Favourites / Go to Nextcloud / Go to local storage**
+- **Go to History / Go to Favourites / Go to Bookmarks / Go to Nextcloud / Go to local storage**
 - **Statistics**, **Refresh**
 - **Sort: newest first** (otherwise A–Z; names starting with `_` always come first)
 - **Show only audio files** (on by default)
@@ -79,8 +80,8 @@ Each track row shows its name in full, then a details line, for example:
 |---|---|
 | ⏮ / ⏭ | Previous / next track in the queue |
 | −15 / +15 | Jump back / forward 15 seconds |
-| ▶ / ⏸ | Play / pause |
-| Slider | Drag to any position |
+| ▶ / ⏸ | Play / pause. Long-press to add a bookmark (see below) |
+| Slider | Touch and hold (until it buzzes), then drag to any position. A short tap is ignored. |
 | Title | Tap to go to the playing track's folder |
 | **Speed** | Playback speed (see below) |
 | **Sleep timer** | Stop after a while (see below) |
@@ -110,7 +111,7 @@ Type in **Search**:
 
 - **Tracks** – one row per track. Long-press → Play opens its folder and resumes it.
 - **Folders** – one row per folder, e.g. "5 played (3 finished) · 2 h 10 m". Tap to open the folder at the
-  track you last played there.
+  track you last played there, highlighted (pink) as if you had tapped it once.
 
 History keeps the latest 1,000 tracks.
 
@@ -118,6 +119,18 @@ History keeps the latest 1,000 tracks.
 
 - Long-press any track or folder → **♥ Add to favourites** (or **💔 Remove from favourites**).
 - **⋮ → Go to Favourites** lists them. Tap a folder to open it; long-press a track → Play to resume it.
+
+## Bookmarks
+
+History remembers automatically where you last were in each track. A bookmark is a place **you** choose to
+remember – a moment in a track, with your own note. It stays exactly where you put it, and one track can
+have several.
+
+- **Long-press ▶ / ⏸** in the player bar to bookmark the current moment. A box opens with a suggested text –
+  the track name and today's date and time – which you can add to. **Save** keeps it, **Cancel** doesn't.
+- **⋮ → Go to Bookmarks** lists them, newest first: the track, the bookmarked time (🔖 12:34) and your text.
+- Long-press a bookmark → **Play** opens its folder and plays from the bookmarked time.
+  **Edit bookmark text** and **Delete bookmark** are in the same menu.
 
 ## Saving folders to the phone (offline)
 

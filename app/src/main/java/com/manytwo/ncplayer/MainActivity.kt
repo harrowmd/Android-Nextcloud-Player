@@ -7,10 +7,14 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.text.InputType
 import android.view.Menu
 import android.view.MenuItem
+import android.view.HapticFeedbackConstants
+import android.view.MotionEvent
 import android.view.View
+import android.view.ViewConfiguration
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.SeekBar
@@ -51,6 +55,8 @@ class MainActivity : AppCompatActivity() {
     private val scrollPos = mutableMapOf<String, Int>()
     /** Track to scroll to once its folder has loaded (the last one played, at startup). */
     private var scrollToTrack: String? = null
+    /** Also select (highlight) [scrollToTrack] once its folder has loaded - set when it comes from the History view. */
+    private var selectScrolledTrack = false
     private lateinit var histToggle: com.google.android.material.button.MaterialButtonToggleGroup
     /** True in the History and Favourites lists (rows from many folders); [favMode] tells them apart. */
     private var historyMode = false
@@ -58,6 +64,10 @@ class MainActivity : AppCompatActivity() {
     private var deep: List<Entry> = emptyList()
     private var searchJob: Job? = null
     private var favMode = false
+    /** True in the Bookmarks list (with [historyMode]). */
+    private var bmMode = false
+    /** Position to start the track opened from a bookmark (once its folder has loaded). */
+    private var pendingStart: Long? = null
     private lateinit var speedBtn: MaterialButton
     private lateinit var sleepBtn: MaterialButton
     /** Track to play once the folder being opened has loaded (from the History view). */
@@ -98,6 +108,7 @@ class MainActivity : AppCompatActivity() {
         Durations.init(this)
         Stats.init(this)
         Favourites.init(this)
+        Bookmarks.init(this)
 
         val root = findViewById<LinearLayout>(R.id.root)
         ViewCompat.setOnApplyWindowInsetsListener(root) { v, insets ->
@@ -160,6 +171,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         play.setOnClickListener { controller?.run { if (playWhenReady) pause() else play() } }
+        play.setOnLongClickListener { addBookmark(); true }
         findViewById<MaterialButton>(R.id.prev).setOnClickListener { controller?.seekToPreviousMediaItem() }
         findViewById<MaterialButton>(R.id.next).setOnClickListener { controller?.seekToNextMediaItem() }
         findViewById<MaterialButton>(R.id.back15).setOnClickListener { controller?.run { seekTo(maxOf(0, currentPosition - 15_000)) } }
@@ -176,6 +188,38 @@ class MainActivity : AppCompatActivity() {
             override fun onStartTrackingTouch(s: SeekBar) { dragging = true }
             override fun onStopTrackingTouch(s: SeekBar) { dragging = false; controller?.seekTo(s.progress * 1000L) }
         })
+        // A short tap on the bar is ignored, so a stray touch never moves the play point. Holding it
+        // (long-press time) grabs it: the play point jumps under the finger and follows it until lifted.
+        seek.setOnTouchListener(object : View.OnTouchListener {
+            var armed = false
+            var arm: Runnable? = null
+            var x = 0f
+            var y = 0f
+            override fun onTouch(v: View, ev: MotionEvent): Boolean {
+                when (ev.actionMasked) {
+                    MotionEvent.ACTION_DOWN -> {
+                        armed = false; x = ev.x; y = ev.y
+                        v.parent?.requestDisallowInterceptTouchEvent(true)
+                        val downTime = ev.downTime
+                        arm = Runnable {
+                            armed = true
+                            v.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                            val down = MotionEvent.obtain(downTime, SystemClock.uptimeMillis(), MotionEvent.ACTION_DOWN, x, y, 0)
+                            v.onTouchEvent(down)
+                            down.recycle()
+                        }.also { v.postDelayed(it, ViewConfiguration.getLongPressTimeout().toLong()) }
+                    }
+                    MotionEvent.ACTION_MOVE -> { x = ev.x; y = ev.y; if (armed) v.onTouchEvent(ev) }
+                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                        arm?.let { v.removeCallbacks(it) }
+                        if (armed) v.onTouchEvent(ev)
+                        else if (ev.actionMasked == MotionEvent.ACTION_UP) toastStatus("Hold the bar to move the play point")
+                        armed = false
+                    }
+                }
+                return true
+            }
+        })
 
         if (Build.VERSION.SDK_INT >= 33 &&
             ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
@@ -188,7 +232,7 @@ class MainActivity : AppCompatActivity() {
         histToggle.addOnButtonCheckedListener { _, id, checked ->
             if (!checked) return@addOnButtonCheckedListener
             prefs.historyFolders = id == R.id.histFolders
-            if (historyMode && !favMode) showHistory()
+            if (historyMode && !favMode && !bmMode) showHistory()
         }
         if (prefs.configured) connect() else showAccount()
     }
@@ -214,9 +258,10 @@ class MainActivity : AppCompatActivity() {
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         when (item.itemId) {
-            R.id.m_history -> { favMode = false; showHistory() }
+            R.id.m_history -> { favMode = false; bmMode = false; showHistory() }
             R.id.m_stats -> showStats()
-            R.id.m_refresh -> if (favMode) showFavourites() else if (historyMode) showHistory() else load()
+            R.id.m_bookmarks -> showBookmarks()
+            R.id.m_refresh -> if (bmMode) showBookmarks() else if (favMode) showFavourites() else if (historyMode) showHistory() else load()
             R.id.m_favs -> showFavourites()
             R.id.m_home -> { historyMode = false; openFolder("") }
             R.id.m_local -> { historyMode = false; openFolder(LOCAL) }
@@ -246,7 +291,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun goUp() {
-        if (historyMode) { historyMode = false; favMode = false; filter.setText(""); load(); return }
+        if (historyMode) { historyMode = false; favMode = false; bmMode = false; filter.setText(""); load(); return }
         if (path.isEmpty() || path == LOCAL) return
         if (isLocal(path)) {
             val roots = LocalStorage.roots(this).map { LOCAL + it.second }
@@ -301,6 +346,8 @@ class MainActivity : AppCompatActivity() {
         applyFilter()
         val last = scrollToTrack ?: ""
         scrollToTrack = null
+        val select = selectScrolledTrack
+        selectScrolledTrack = false
         val lastIdx = if (last.substringBeforeLast('/', "") == p)
             adapter.items.indexOfFirst { it.name == last.substringAfterLast('/') } else -1
         val pending = pendingPlay?.let { n -> adapter.items.indexOfFirst { it.name == n } } ?: -1
@@ -308,7 +355,7 @@ class MainActivity : AppCompatActivity() {
         val lm = list.layoutManager as LinearLayoutManager
         when {
             pending >= 0 -> { lm.scrollToPositionWithOffset(pending, list.height / 3); onEntryClick(adapter.items[pending]) }
-            lastIdx >= 0 -> lm.scrollToPositionWithOffset(lastIdx, list.height / 3)
+            lastIdx >= 0 -> { lm.scrollToPositionWithOffset(lastIdx, list.height / 3); if (select) adapter.selected = last }
             else -> list.scrollToPosition(scrollPos[p] ?: 0)
         }
     }
@@ -316,7 +363,7 @@ class MainActivity : AppCompatActivity() {
     private fun showHistory() {
         if (!historyMode) (list.layoutManager as LinearLayoutManager).let { scrollPos[path] = it.findFirstVisibleItemPosition() }
         historyMode = true
-        favMode = false
+        favMode = false; bmMode = false
         loadJob?.cancel()
         filter.setText("")
         folderView.text = "History"
@@ -399,10 +446,66 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
+    private fun showBookmarks() {
+        if (!historyMode) (list.layoutManager as LinearLayoutManager).let { scrollPos[path] = it.findFirstVisibleItemPosition() }
+        historyMode = true
+        favMode = false
+        bmMode = true
+        loadJob?.cancel()
+        filter.setText("")
+        folderView.text = "🔖 Bookmarks"
+        parentView.isVisible = false
+        histToggle.isVisible = false
+        setPrefix("")
+        status.isVisible = false
+        all = Bookmarks.all().map { b ->
+            Entry(b.id.substringAfterLast('/'), false, 0, b.at, "", folder = b.id.substringBeforeLast('/', ""),
+                note = "🔖 ${formatTime(b.pos)}  ·  ${b.text}", bookmark = b)
+        }
+        applyFilter()
+        list.scrollToPosition(0)
+        if (all.isEmpty()) { status.text = "No bookmarks yet. Long-press ▶ / ⏸ in the player bar to add one."; status.isVisible = true }
+    }
+
+    /** Long-press on play / pause: bookmark the current track at the current position. */
+    private fun addBookmark() {
+        val c = controller ?: return
+        val item = c.currentMediaItem ?: run { toastStatus("Nothing loaded to bookmark"); return }
+        val pos = c.currentPosition
+        val title = item.mediaMetadata.title?.toString() ?: prettyName(item.mediaId.substringAfterLast('/'))
+        val now = java.text.SimpleDateFormat("d MMM yyyy HH:mm", java.util.Locale.getDefault()).format(Date())
+        bookmarkDialog("Bookmark at ${formatTime(pos)}", "$title – $now ") { t ->
+            Bookmarks.add(Bookmark(item.mediaId, pos, t, System.currentTimeMillis()))
+            toastStatus("Bookmark saved")
+            if (bmMode) showBookmarks()
+        }
+    }
+
+    /** Text box with Save / Cancel; [onSave] gets the trimmed text (the suggestion if left empty). */
+    private fun bookmarkDialog(title: String, text: String, onSave: (String) -> Unit) {
+        val pad = (20 * resources.displayMetrics.density).toInt()
+        val box = android.widget.EditText(this).apply {
+            setText(text); setSelection(text.length); minLines = 2
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE or
+                android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+        }
+        val frame = android.widget.FrameLayout(this).apply { setPadding(pad, pad / 2, pad, 0); addView(box) }
+        val dlg = AlertDialog.Builder(this)
+            .setTitle(title)
+            .setView(frame)
+            .setPositiveButton("Save") { _, _ -> onSave(box.text.toString().trim().ifEmpty { text.trim() }) }
+            .setNegativeButton("Cancel", null)
+            .create()
+        dlg.window?.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE)
+        dlg.show()
+        box.requestFocus()
+    }
+
     private fun showFavourites() {
         if (!historyMode) (list.layoutManager as LinearLayoutManager).let { scrollPos[path] = it.findFirstVisibleItemPosition() }
         historyMode = true
         favMode = true
+        bmMode = false
         loadJob?.cancel()
         filter.setText("")
         folderView.text = "♥ Favourites"
@@ -427,7 +530,7 @@ class MainActivity : AppCompatActivity() {
         searchJob?.cancel()
         deep = emptyList()
         historyMode = false
-        favMode = false
+        favMode = false; bmMode = false
         histToggle.isVisible = false
         val p = path
         if (isLocal(p)) { loadLocal(p); return }
@@ -449,6 +552,8 @@ class MainActivity : AppCompatActivity() {
                 val lastIdx = if (last.substringBeforeLast('/', "") == p)
                     adapter.items.indexOfFirst { it.name == last.substringAfterLast('/') } else -1
                 scrollToTrack = null
+                val select = selectScrolledTrack
+                selectScrolledTrack = false
                 val pending = pendingPlay?.let { n -> adapter.items.indexOfFirst { it.name == n } } ?: -1
                 pendingPlay = null
                 if (pending >= 0) {
@@ -457,6 +562,8 @@ class MainActivity : AppCompatActivity() {
                 } else if (lastIdx >= 0) {
                     // Put the last played track about a third of the way down the list.
                     (list.layoutManager as LinearLayoutManager).scrollToPositionWithOffset(lastIdx, list.height / 3)
+                    // Coming from History: highlight the track that was played, as a single tap would.
+                    if (select) adapter.selected = last
                 } else list.scrollToPosition(scrollPos[p] ?: 0)
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
@@ -573,6 +680,7 @@ class MainActivity : AppCompatActivity() {
         } else if (loadJob?.isActive != true) {
             status.isVisible = false
         }
+        if (bmMode) { showCount("${adapter.items.size} bookmarks"); return }
         if (favMode) { showCount("${adapter.items.size} favourites"); return }
         if (historyMode) {
             showCount("${adapter.items.size} " + if (prefs.historyFolders) "folders played" else "tracks played")
@@ -586,18 +694,20 @@ class MainActivity : AppCompatActivity() {
         if (e.folder != null && e.isDir) {
             // History folder row: open the folder at the track last played there.
             historyMode = false
-            favMode = false
+            favMode = false; bmMode = false
             filter.setText("")
             path = e.folder
             scrollToTrack = History.recent().firstOrNull { it.first.substringBeforeLast('/', "") == e.folder }?.first
+            selectScrolledTrack = true
             load()
             return
         }
         if (e.folder != null) {
             // History row: open its folder, then play it from where it was left.
             historyMode = false
-            favMode = false
+            favMode = false; bmMode = false
             pendingPlay = e.name
+            pendingStart = e.bookmark?.pos
             filter.setText("")
             path = e.folder
             load()
@@ -623,6 +733,9 @@ class MainActivity : AppCompatActivity() {
                     .build())
                 .build()
         }
+        // From a bookmark: start there (the player service asks History too, when the track changes).
+        pendingStart?.let { History.startNextAt(path + sep + e.name, it) }
+        pendingStart = null
         c.setMediaItems(items, queue.indexOf(e), History.resumePos(path + sep + e.name))
         c.setPlaybackSpeed(prefs.speed)
         c.prepare()
@@ -665,6 +778,14 @@ class MainActivity : AppCompatActivity() {
                 val added = Favourites.toggle(id)
                 toastStatus(if (added) "Added to favourites" else "Removed from favourites")
                 if (favMode) showFavourites() else adapter.notifyDataSetChanged()
+            }
+        }
+        e.bookmark?.let { b ->
+            acts += "✏  Edit bookmark text" to { bookmarkDialog("Edit bookmark", b.text) { t -> Bookmarks.edit(b.at, t); showBookmarks() } }
+            acts += "🗑  Delete bookmark" to {
+                AlertDialog.Builder(this).setMessage("Delete this bookmark?\n\n${b.text}")
+                    .setPositiveButton("Delete") { _, _ -> Bookmarks.remove(b.at); showBookmarks() }
+                    .setNegativeButton("Cancel", null).show()
             }
         }
         if (e.isDir && !historyMode && !isLocal(id))

@@ -30,9 +30,17 @@ object History {
     @Synchronized
     fun get(id: String): Mark? = marks[id]
 
+    /** One-off start points (from a bookmark): used instead of the resume point for the next few seconds. */
+    private val startAt = HashMap<String, Pair<Long, Long>>()
+
+    /** Start [id] at [pos] when it is played next (within 10 s) - both the app and the player service ask. */
+    @Synchronized
+    fun startNextAt(id: String, pos: Long) { startAt[id] = pos to System.currentTimeMillis() }
+
     /** Where to start this track: a few seconds before where it was left, or 0 if new or finished. */
     @Synchronized
     fun resumePos(id: String): Long {
+        startAt[id]?.let { (pos, set) -> if (System.currentTimeMillis() - set < 10_000) return pos else startAt.remove(id) }
         val m = marks[id] ?: return 0
         return if (m.done || m.pos < 10_000) 0 else maxOf(0, m.pos - 3_000)
     }
