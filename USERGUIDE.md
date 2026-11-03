@@ -71,6 +71,8 @@ Each track row shows its name in full, then a details line, for example:
   interrupt what you are listening to.
 - **Long-press a track → ▶ Play** to play it. The other tracks in the folder become the queue, so the next
   chapter follows automatically.
+- When the next track starts, the list scrolls so the playing track is in the middle, and the pink
+  tap highlight is cleared.
 - Long-press also offers **♥ Add to favourites**, **⬇ Save to phone** (folders) and **ℹ Details** (the exact
   original file name, size and date).
 

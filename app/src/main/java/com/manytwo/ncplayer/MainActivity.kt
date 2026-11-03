@@ -850,6 +850,7 @@ class MainActivity : AppCompatActivity() {
         val c = controller
         val item = c?.currentMediaItem
         bar.isVisible = item != null
+        findViewById<View>(R.id.divBar).isVisible = item != null
         adapter.playingInBar = item != null
         if (c == null || item == null) {
             // Nothing loaded in the player: highlight the last track played instead.
@@ -875,6 +876,29 @@ class MainActivity : AppCompatActivity() {
         val state = id + c.playWhenReady
         if (state != lastBarState) { lastBarState = state; adapter.notifyDataSetChanged() }
         adapter.playing = if (id.substringBeforeLast('/', "") == path) id.substringAfterLast('/') else null
+        if (id != lastPlayingId) {
+            // A new track started (e.g. the next one in the folder): bring it to the middle of the list
+            // and drop the pink tap highlight, which no longer marks anything useful.
+            val first = lastPlayingId == null
+            lastPlayingId = id
+            if (!first) {
+                adapter.selected = null
+                centerPlaying(id)
+            }
+        }
+    }
+
+    private var lastPlayingId: String? = null
+
+    /** Scrolls the track list so the playing track sits in the middle (if it is in the folder on screen). */
+    private fun centerPlaying(id: String) {
+        if (historyMode || id.substringBeforeLast('/', "") != path) return
+        val idx = adapter.items.indexOfFirst { !it.isDir && it.folder == null && it.name == id.substringAfterLast('/') }
+        if (idx < 0) return
+        list.post {
+            val row = list.getChildAt(0)?.height ?: 0
+            (list.layoutManager as LinearLayoutManager).scrollToPositionWithOffset(idx, (list.height - row) / 2)
+        }
     }
 
     /** Tap the title in the player bar to go to the folder of the playing file. */
