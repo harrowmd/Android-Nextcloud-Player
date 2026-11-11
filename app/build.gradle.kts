@@ -14,8 +14,8 @@ android {
         applicationId = "com.manytwo.ncplayer"
         minSdk = 29
         targetSdk = 36
-        versionCode = 28
-        versionName = "1.27"
+        versionCode = 30
+        versionName = "1.29"
         buildConfigField("String", "BUILD_TIME",
             "\"" + SimpleDateFormat("yyyy-MM-dd HH:mm").format(Date()) + "\"")
     }

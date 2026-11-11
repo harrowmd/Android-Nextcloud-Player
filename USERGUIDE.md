@@ -107,6 +107,8 @@ Type in **Search**:
 - Every track's position is saved while it plays and whenever you pause, skip or close the app.
 - Playing a track you have started resumes **3 seconds before** where you stopped. Tracks played to the end
   (or within 15 s of it) start again from the beginning.
+- When a track ends and the next one starts on its own, the next one always plays from **0:00**, even if you
+  had started it before. Choose it yourself (tap or long-press → Play) to resume it instead.
 - After a restart, the app reopens the last folder with the last track highlighted.
 
 **⋮ → Go to History** shows everything you have played, newest first. The switch at the top changes between:

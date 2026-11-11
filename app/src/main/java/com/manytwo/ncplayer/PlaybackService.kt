@@ -102,6 +102,9 @@ class PlaybackService : MediaSessionService() {
             override fun onMediaItemTransition(item: MediaItem?, reason: Int) {
                 AppLog.log("play: ${item?.mediaId}")
                 Stats.newSession()
+                // Remember the track here, not only in MainActivity: tracks that start in the background
+                // (auto-advance with the screen off) must become the "last track" for headset/widget resume.
+                item?.mediaId?.let { id -> Prefs(this@PlaybackService).let { if (it.lastTrack != id) it.lastTrack = id } }
             }
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 AppLog.log(if (isPlaying) "playing → ${outputDevices()}" else "stopped/paused")
@@ -119,6 +122,9 @@ class PlaybackService : MediaSessionService() {
                 // Leaving a track: remember where (or that it finished); arriving at one: resume it.
                 if (reason == Player.DISCONTINUITY_REASON_AUTO_TRANSITION) History.markDone(oldId)
                 else History.update(oldId, old.positionMs, C.TIME_UNSET)
+                // A track that starts on its own after the previous one ended plays from 0:00 (user, 11 Nov);
+                // saved positions are only used when a track is chosen or skipped to.
+                if (reason == Player.DISCONTINUITY_REASON_AUTO_TRANSITION) return
                 val resume = History.resumePos(newId)
                 if (resume > 0) player.seekTo(resume)
             }
