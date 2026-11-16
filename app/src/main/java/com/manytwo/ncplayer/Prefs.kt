@@ -21,6 +21,10 @@ class Prefs(context: Context) {
     var lastTrack: String
         get() = sp.getString("lastTrack", "")!!
         set(v) = sp.edit().putString("lastTrack", v).apply()
+    /** The play queue (JSON: id, uri, title, artist per track), so Play from the car or widget can carry on through it. */
+    var lastQueue: String
+        get() = sp.getString("lastQueue", "")!!
+        set(v) = sp.edit().putString("lastQueue", v).apply()
     var newestFirst: Boolean
         get() = sp.getBoolean("newestFirst", false)
         set(v) = sp.edit().putBoolean("newestFirst", v).apply()

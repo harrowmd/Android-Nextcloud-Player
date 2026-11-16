@@ -66,6 +66,10 @@ class MainActivity : AppCompatActivity() {
     private var favMode = false
     /** True in the Bookmarks list (with [historyMode]). */
     private var bmMode = false
+    /** True in the Log list (with [historyMode]). */
+    private var logMode = false
+    /** A History or Log row for a finished track: play the next track in its folder instead. */
+    private var pendingNext = false
     /** Position to start the track opened from a bookmark (once its folder has loaded). */
     private var pendingStart: Long? = null
     private lateinit var speedBtn: MaterialButton
@@ -232,7 +236,7 @@ class MainActivity : AppCompatActivity() {
         histToggle.addOnButtonCheckedListener { _, id, checked ->
             if (!checked) return@addOnButtonCheckedListener
             prefs.historyFolders = id == R.id.histFolders
-            if (historyMode && !favMode && !bmMode) showHistory()
+            if (historyMode && !favMode && !bmMode && !logMode) showHistory()
         }
         if (prefs.configured) connect() else showAccount()
     }
@@ -258,10 +262,11 @@ class MainActivity : AppCompatActivity() {
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         when (item.itemId) {
-            R.id.m_history -> { favMode = false; bmMode = false; showHistory() }
+            R.id.m_history -> { favMode = false; bmMode = false; logMode = false; showHistory() }
             R.id.m_stats -> showStats()
             R.id.m_bookmarks -> showBookmarks()
-            R.id.m_refresh -> if (bmMode) showBookmarks() else if (favMode) showFavourites() else if (historyMode) showHistory() else load()
+            R.id.m_log -> showLog()
+            R.id.m_refresh -> if (logMode) showLog() else if (bmMode) showBookmarks() else if (favMode) showFavourites() else if (historyMode) showHistory() else load()
             R.id.m_favs -> showFavourites()
             R.id.m_home -> { historyMode = false; openFolder("") }
             R.id.m_local -> { historyMode = false; openFolder(LOCAL) }
@@ -291,7 +296,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun goUp() {
-        if (historyMode) { historyMode = false; favMode = false; bmMode = false; filter.setText(""); load(); return }
+        if (historyMode) { historyMode = false; favMode = false; bmMode = false; logMode = false; filter.setText(""); load(); return }
         if (path.isEmpty() || path == LOCAL) return
         if (isLocal(path)) {
             val roots = LocalStorage.roots(this).map { LOCAL + it.second }
@@ -350,8 +355,13 @@ class MainActivity : AppCompatActivity() {
         selectScrolledTrack = false
         val lastIdx = if (last.substringBeforeLast('/', "") == p)
             adapter.items.indexOfFirst { it.name == last.substringAfterLast('/') } else -1
-        val pending = pendingPlay?.let { n -> adapter.items.indexOfFirst { it.name == n } } ?: -1
+        var pending = pendingPlay?.let { n -> adapter.items.indexOfFirst { it.name == n } } ?: -1
         pendingPlay = null
+        if (pendingNext && pending >= 0) {
+            val next = (pending + 1 until adapter.items.size).firstOrNull { adapter.items[it].isAudio }
+            if (next != null) { pending = next; toastStatus("That track was finished: playing the next one") }
+        }
+        pendingNext = false
         val lm = list.layoutManager as LinearLayoutManager
         when {
             pending >= 0 -> { lm.scrollToPositionWithOffset(pending, list.height / 3); onEntryClick(adapter.items[pending]) }
@@ -363,7 +373,7 @@ class MainActivity : AppCompatActivity() {
     private fun showHistory() {
         if (!historyMode) (list.layoutManager as LinearLayoutManager).let { scrollPos[path] = it.findFirstVisibleItemPosition() }
         historyMode = true
-        favMode = false; bmMode = false
+        favMode = false; bmMode = false; logMode = false
         loadJob?.cancel()
         filter.setText("")
         folderView.text = "History"
@@ -451,6 +461,7 @@ class MainActivity : AppCompatActivity() {
         historyMode = true
         favMode = false
         bmMode = true
+        logMode = false
         loadJob?.cancel()
         filter.setText("")
         folderView.text = "🔖 Bookmarks"
@@ -465,6 +476,38 @@ class MainActivity : AppCompatActivity() {
         applyFilter()
         list.scrollToPosition(0)
         if (all.isEmpty()) { status.text = "No bookmarks yet. Long-press ▶ / ⏸ in the player bar to add one."; status.isVisible = true }
+    }
+
+    /**
+     * The listening log: the last 50 stretches of listening, newest first, with when, how far into
+     * the track (and %), and how each ended. Tapping one plays that track from where it got to
+     * (or the next track, if it was finished).
+     */
+    private fun showLog() {
+        if (!historyMode) (list.layoutManager as LinearLayoutManager).let { scrollPos[path] = it.findFirstVisibleItemPosition() }
+        historyMode = true
+        favMode = false; bmMode = false; logMode = true
+        loadJob?.cancel()
+        filter.setText("")
+        folderView.text = "Log"
+        parentView.isVisible = false
+        histToggle.isVisible = false
+        setPrefix("")
+        status.isVisible = false
+        val day = java.text.SimpleDateFormat("EEE d MMM HH:mm", java.util.Locale.getDefault())
+        val hm = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
+        all = PlayLog.recent(50).map { p ->
+            val pct = if (p.percent >= 0) "  (${p.percent} %)" else ""
+            val len = if (p.dur > 0) " of ${formatTime(p.dur)}" else ""
+            val note = "${day.format(Date(p.start))}–${hm.format(Date(p.end))}  ·  ${formatTime(p.from)} → ${formatTime(p.to)}$len$pct" +
+                "\n${prettyFolder(p.id.substringBeforeLast('/', "").substringAfterLast('/'))}  ·  ${p.how}"
+            Entry(p.id.substringAfterLast('/'), false, 0, p.start, "", folder = p.id.substringBeforeLast('/', ""), note = note,
+                // Where to start when tapped; a finished one goes on to the next track instead.
+                bookmark = if (p.finished) null else Bookmark(p.id, p.to, "", p.start))
+        }
+        applyFilter()
+        list.scrollToPosition(0)
+        if (all.isEmpty()) { status.text = "Nothing in the log yet: it starts with this version."; status.isVisible = true }
     }
 
     /** Long-press on play / pause: bookmark the current track at the current position. */
@@ -506,6 +549,7 @@ class MainActivity : AppCompatActivity() {
         historyMode = true
         favMode = true
         bmMode = false
+        logMode = false
         loadJob?.cancel()
         filter.setText("")
         folderView.text = "♥ Favourites"
@@ -530,7 +574,7 @@ class MainActivity : AppCompatActivity() {
         searchJob?.cancel()
         deep = emptyList()
         historyMode = false
-        favMode = false; bmMode = false
+        favMode = false; bmMode = false; logMode = false
         histToggle.isVisible = false
         val p = path
         if (isLocal(p)) { loadLocal(p); return }
@@ -554,8 +598,13 @@ class MainActivity : AppCompatActivity() {
                 scrollToTrack = null
                 val select = selectScrolledTrack
                 selectScrolledTrack = false
-                val pending = pendingPlay?.let { n -> adapter.items.indexOfFirst { it.name == n } } ?: -1
+                var pending = pendingPlay?.let { n -> adapter.items.indexOfFirst { it.name == n } } ?: -1
                 pendingPlay = null
+                if (pendingNext && pending >= 0) {
+                    val next = (pending + 1 until adapter.items.size).firstOrNull { adapter.items[it].isAudio }
+                    if (next != null) { pending = next; toastStatus("That track was finished: playing the next one") }
+                }
+                pendingNext = false
                 if (pending >= 0) {
                     (list.layoutManager as LinearLayoutManager).scrollToPositionWithOffset(pending, list.height / 3)
                     onEntryClick(adapter.items[pending])
@@ -680,6 +729,7 @@ class MainActivity : AppCompatActivity() {
         } else if (loadJob?.isActive != true) {
             status.isVisible = false
         }
+        if (logMode) { showCount("last ${adapter.items.size} played"); return }
         if (bmMode) { showCount("${adapter.items.size} bookmarks"); return }
         if (favMode) { showCount("${adapter.items.size} favourites"); return }
         if (historyMode) {
@@ -694,7 +744,7 @@ class MainActivity : AppCompatActivity() {
         if (e.folder != null && e.isDir) {
             // History folder row: open the folder at the track last played there.
             historyMode = false
-            favMode = false; bmMode = false
+            favMode = false; bmMode = false; logMode = false
             filter.setText("")
             path = e.folder
             scrollToTrack = History.recent().firstOrNull { it.first.substringBeforeLast('/', "") == e.folder }?.first
@@ -704,8 +754,12 @@ class MainActivity : AppCompatActivity() {
         }
         if (e.folder != null) {
             // History row: open its folder, then play it from where it was left.
+            // A track that was played to the end: carry on with the next one (History and Log rows).
+            val sepF = if (e.folder.isEmpty()) "" else "/"
+            pendingNext = e.bookmark == null && !favMode &&
+                (logMode || History.get(e.folder + sepF + e.name)?.done == true)
             historyMode = false
-            favMode = false; bmMode = false
+            favMode = false; bmMode = false; logMode = false
             pendingPlay = e.name
             pendingStart = e.bookmark?.pos
             filter.setText("")

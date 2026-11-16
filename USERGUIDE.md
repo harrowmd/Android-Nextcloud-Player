@@ -9,6 +9,7 @@ It is designed to make long file names easy to read and to pick up every track w
 - [Searching](#searching)
 - [Resume and History](#resume-and-history)
 - [Favourites](#favourites)
+- [Log](#log)
 - [Bookmarks](#bookmarks)
 - [Saving folders to the phone (offline)](#saving-folders-to-the-phone-offline)
 - [Phone storage and SD card](#phone-storage-and-sd-card)
@@ -57,7 +58,7 @@ Each track row shows its name in full, then a details line, for example:
 
 ### The ⋮ menu
 
-- **Go to History / Go to Favourites / Go to Bookmarks / Go to Nextcloud / Go to local storage**
+- **Go to History / Go to Favourites / Go to Bookmarks / Go to Log / Go to Nextcloud / Go to local storage**
 - **Statistics**, **Refresh**
 - **Sort: newest first** (otherwise A–Z; names starting with `_` always come first)
 - **Show only audio files** (on by default)
@@ -110,14 +111,33 @@ Type in **Search**:
 - When a track ends and the next one starts on its own, the next one always plays from **0:00**, even if you
   had started it before. Choose it yourself (tap or long-press → Play) to resume it instead.
 - After a restart, the app reopens the last folder with the last track highlighted.
+- **Play from the car, a headset or the widget** when nothing is loaded carries on with the last track
+  where you left it, **and then the rest of that folder** (the queue you last played).
 
 **⋮ → Go to History** shows everything you have played, newest first. The switch at the top changes between:
 
-- **Tracks** – one row per track. Long-press → Play opens its folder and resumes it.
+- **Tracks** – one row per track. Long-press → Play opens its folder and resumes it. If that track was
+  played to the end, the **next track** in the folder plays instead.
 - **Folders** – one row per folder, e.g. "5 played (3 finished) · 2 h 10 m". Tap to open the folder at the
   track you last played there, highlighted (pink) as if you had tapped it once.
 
 History keeps the latest 1,000 tracks.
+
+## Log
+
+**⋮ → Go to Log** lists the last 50 times you listened, newest first – one row each time a track was
+played, e.g.
+
+> Dombey and Son 59 – Chapter 58 After a Lapse
+> Sun 16 Nov 15:36–16:06 · 18:57 → 44:08 of 44:08 (100 %)
+> Dombey and Son · finished, next track started
+
+- When it started and stopped, from where to where in the track, and how far that is (%).
+- How it ended: *paused*, *finished, next track started*, *finished, nothing queued after it*,
+  *skipped to another track* or *player closed*.
+- Short pauses (carrying on within 30 s of the same place) stay in one row.
+- **Tap a row** to play that track from where that listen stopped. For a finished one, the next track in
+  the folder plays.
 
 ## Favourites
 

@@ -38,7 +38,12 @@ class PlaybackService : MediaSessionService() {
     private val handler = Handler(Looper.getMainLooper())
     private val saver = object : Runnable {
         override fun run() {
-            session?.player?.let { if (it.isPlaying) savePosition(it, force = false) }
+            session?.player?.let {
+                if (it.isPlaying) {
+                    savePosition(it, force = false)
+                    it.currentMediaItem?.mediaId?.let { id -> PlayLog.progress(id, it.currentPosition, it.duration) }
+                }
+            }
             handler.postDelayed(this, 5_000)
         }
     }
@@ -81,6 +86,7 @@ class PlaybackService : MediaSessionService() {
         AppLog.log("service start")
         History.init(this)
         Stats.init(this)
+        PlayLog.init(this)
         Downloads.init(this)
         val prefs = Prefs(this)
         // Read the login on every request so a changed app password takes effect without restarting.
@@ -109,6 +115,16 @@ class PlaybackService : MediaSessionService() {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 AppLog.log(if (isPlaying) "playing → ${outputDevices()}" else "stopped/paused")
                 if (isPlaying) listenMark = android.os.SystemClock.elapsedRealtime() else savePosition(player)
+                val id = player.currentMediaItem?.mediaId ?: return
+                if (isPlaying) PlayLog.begin(id, player.currentPosition, player.duration)
+                else PlayLog.finish(id, player.currentPosition, player.duration,
+                    if (player.playbackState == Player.STATE_ENDED) "finished, nothing queued after it" else "paused")
+            }
+            override fun onPlaybackStateChanged(state: Int) {
+                if (state == Player.STATE_ENDED) AppLog.log("end of queue: no track after ${player.currentMediaItem?.mediaId}")
+            }
+            override fun onTimelineChanged(timeline: androidx.media3.common.Timeline, reason: Int) {
+                if (reason == Player.TIMELINE_CHANGE_REASON_PLAYLIST_CHANGED) saveQueue(player)
             }
             override fun onPositionDiscontinuity(old: Player.PositionInfo, new: Player.PositionInfo, reason: Int) {
                 val oldId = old.mediaItem?.mediaId ?: return
@@ -122,6 +138,12 @@ class PlaybackService : MediaSessionService() {
                 // Leaving a track: remember where (or that it finished); arriving at one: resume it.
                 if (reason == Player.DISCONTINUITY_REASON_AUTO_TRANSITION) History.markDone(oldId)
                 else History.update(oldId, old.positionMs, C.TIME_UNSET)
+                // The log: the old track's stretch ends here; the new one's begins (at its resume point, if any).
+                val oldDur = History.get(oldId)?.dur ?: 0
+                if (reason == Player.DISCONTINUITY_REASON_AUTO_TRANSITION) PlayLog.finish(oldId, oldDur, oldDur, "finished, next track started")
+                else PlayLog.finish(oldId, old.positionMs, oldDur, "skipped to another track")
+                if (player.playWhenReady) PlayLog.begin(newId,
+                    if (reason == Player.DISCONTINUITY_REASON_AUTO_TRANSITION) 0 else History.resumePos(newId), C.TIME_UNSET)
                 // A track that starts on its own after the previous one ended plays from 0:00 (user, 11 Nov);
                 // saved positions are only used when a track is chosen or skipped to.
                 if (reason == Player.DISCONTINUITY_REASON_AUTO_TRANSITION) return
@@ -169,20 +191,46 @@ class PlaybackService : MediaSessionService() {
         handler.post(saver)
     }
 
+    /** Remembers the queue, so Play from the car, a headset or the widget can carry on through it. */
+    private fun saveQueue(p: Player) {
+        val a = org.json.JSONArray()
+        for (i in 0 until p.mediaItemCount) p.getMediaItemAt(i).let { m ->
+            a.put(org.json.JSONObject().put("id", m.mediaId).put("uri", m.localConfiguration?.uri?.toString() ?: "")
+                .put("title", m.mediaMetadata.title?.toString() ?: "").put("artist", m.mediaMetadata.artist?.toString() ?: ""))
+        }
+        Prefs(this).lastQueue = a.toString()
+    }
+
+    /**
+     * Play pressed with nothing loaded: the last queue again (a downloaded copy where there is one),
+     * at the last track and where it was left. Before 1.30 only the last track was loaded, so
+     * playback stopped at its end instead of going on to the next one (16 Nov).
+     */
     private fun lastTrackItem(): MediaSession.MediaItemsWithStartPosition {
         val prefs = Prefs(this)
         val id = prefs.lastTrack
         if (id.isEmpty()) throw IllegalStateException("nothing played yet")
-        val uri = Downloads.localFile(id)?.let { android.net.Uri.fromFile(it) }
-            ?: android.net.Uri.parse(Dav(prefs.server, prefs.user, prefs.pass).url(id))
-        val item = MediaItem.Builder().setUri(uri).setMediaId(id)
+        fun item(mid: String, uri: String, title: String, artist: String) = MediaItem.Builder()
+            .setUri(Downloads.localFile(mid)?.let { android.net.Uri.fromFile(it) }
+                ?: if (uri.isNotEmpty()) android.net.Uri.parse(uri) else android.net.Uri.parse(Dav(prefs.server, prefs.user, prefs.pass).url(mid)))
+            .setMediaId(mid)
             .setMediaMetadata(androidx.media3.common.MediaMetadata.Builder()
-                .setTitle(prettyName(id.substringAfterLast('/')))
-                .setArtist(prettyFolder(id.substringBeforeLast('/', "").substringAfterLast('/')))
+                .setTitle(title.ifEmpty { prettyName(mid.substringAfterLast('/')) })
+                .setArtist(artist.ifEmpty { prettyFolder(mid.substringBeforeLast('/', "").substringAfterLast('/')) })
                 .build())
             .build()
-        AppLog.log("resume last track: $id")
-        return MediaSession.MediaItemsWithStartPosition(listOf(item), 0, History.resumePos(id))
+        val queue = runCatching {
+            val a = org.json.JSONArray(prefs.lastQueue)
+            (0 until a.length()).map { a.getJSONObject(it) }
+                .map { item(it.getString("id"), it.optString("uri"), it.optString("title"), it.optString("artist")) }
+        }.getOrDefault(emptyList())
+        val at = queue.indexOfFirst { it.mediaId == id }
+        if (at < 0) {
+            AppLog.log("resume last track: $id (no saved queue)")
+            return MediaSession.MediaItemsWithStartPosition(listOf(item(id, "", "", "")), 0, History.resumePos(id))
+        }
+        AppLog.log("resume last track: $id (track ${at + 1} of ${queue.size} in the queue)")
+        return MediaSession.MediaItemsWithStartPosition(queue, at, History.resumePos(id))
     }
 
     private fun outputDevices(): String {
@@ -204,7 +252,10 @@ class PlaybackService : MediaSessionService() {
         handler.removeCallbacks(saver)
         handler.removeCallbacks(sleepTick)
         SleepTimer.onChange = null
-        session?.player?.let { savePosition(it) }
+        session?.player?.let { p ->
+            savePosition(p)
+            p.currentMediaItem?.mediaId?.let { PlayLog.finish(it, p.currentPosition, p.duration, "player closed") }
+        }
         Stats.save()
         session?.run { player.release(); release() }
         session = null
